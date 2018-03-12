@@ -19,46 +19,42 @@
     NSLog(@"accessibility enabled: %d", AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES})); // 10.9+
 
     self.monitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
-        if (event.buttonNumber != 2) { // handle only middle button click
+        if (event.buttonNumber != 2) // handle only middle button click
             return;
-        }
 
         AXUIElementRef sysElement = AXUIElementCreateSystemWide(), curElement;
         AXUIElementCopyElementAtPosition(sysElement, NSEvent.mouseLocation.x, NSEvent.mouseLocation.y, &curElement);
         CFRelease(sysElement);
 
-        while (curElement) {
+        BOOL isScrollArea = NO;
+        while (curElement)
+        {
             CFTypeRef role;
             AXUIElementCopyAttributeValue(curElement, kAXRoleAttribute, &role);
-            BOOL isScrollArea = CFStringCompare(role, kAXScrollAreaRole, kNilOptions) == kCFCompareEqualTo;
+            isScrollArea = CFStringCompare(role, kAXScrollAreaRole, kNilOptions) == kCFCompareEqualTo;
             CFRelease(role);
             if (isScrollArea)
+            {
+                CFRelease(curElement);
                 break;
+            }
 
             AXUIElementRef parentElement;
             AXUIElementCopyAttributeValue(curElement, kAXParentAttribute, (CFTypeRef *)&parentElement);
             CFRelease(curElement);
             curElement = parentElement;
         }
-        if (!curElement)
+        if (!isScrollArea)
             return;
 
-        AXUIElementRef scrollAreaElement = curElement;
-        NSMutableString *attributesStr;
-        CFArrayRef attributes;
-        if (AXUIElementCopyAttributeNames(scrollAreaElement, &attributes) == kAXErrorSuccess) {
-            attributesStr = [NSMutableString new];
-            for (NSString *attribute in (__bridge NSArray *)attributes) {
-                CFTypeRef value;
-                BOOL hasValue = AXUIElementCopyAttributeValue(scrollAreaElement, (CFStringRef)attribute, &value) == kAXErrorSuccess;
-                [attributesStr appendFormat:@"\n%@ = %@", attribute, value];
-                if (hasValue)
-                    CFRelease(value);
-            }
-            CFRelease(attributes);
+        // wheel1 - vertical, wheel2 - horizontal
+        // > 0 - up/left, < 0 - down/right
+        CGEventRef scrollEvent = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitPixel, 1, -15);
+        if (scrollEvent)
+        {
+            CGEventPost(kCGHIDEventTap, scrollEvent);
+            CFRelease(scrollEvent);
         }
-        NSLog(@"scrollarea %@ attributes:%@", scrollAreaElement, attributesStr);
-        CFRelease(scrollAreaElement);
     }];
 }
 
