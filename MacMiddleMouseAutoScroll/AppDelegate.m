@@ -13,6 +13,9 @@
 
 @property (weak) id middleClickMonitor;
 @property (weak) id anyClickMonitor;
+@property (weak) id moveMonitor;
+
+@property NSPoint middleClickLocation;
 @end
 
 @implementation AppDelegate
@@ -29,6 +32,7 @@
 - (void)applicationWillTerminate:(NSNotification *)notification {
     [NSEvent removeMonitor:self.middleClickMonitor];
     [NSEvent removeMonitor:self.anyClickMonitor];
+    [NSEvent removeMonitor:self.moveMonitor];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
@@ -46,6 +50,7 @@
     self.middleClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         if (event.buttonNumber != 2) // handle only middle button click
             return;
+        self.middleClickLocation = NSEvent.mouseLocation;
 
         AXUIElementRef sysElement = AXUIElementCreateSystemWide(), curElement;
         AXUIElementCopyElementAtPosition(sysElement, NSEvent.mouseLocation.x, NSEvent.mouseLocation.y, &curElement);
@@ -91,6 +96,7 @@
         [NSEvent removeMonitor:sself.middleClickMonitor];
         sself.middleClickMonitor = nil;
         [sself installAnyClickOrWheelMonitor];
+        [sself installMouseMoveMonitor];
     }];
 }
 
@@ -103,7 +109,28 @@
 
         [NSEvent removeMonitor:sself.anyClickMonitor];
         sself.anyClickMonitor = nil;
+        [NSEvent removeMonitor:sself.moveMonitor];
+        sself.moveMonitor = nil;
         [sself installMiddleClickMonitor];
+    }];
+}
+
+- (void)installMouseMoveMonitor {
+    __typeof__(self) __weak welf = self;
+    self.moveMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved handler:^(NSEvent * _Nonnull event) {
+        if (event.subtype != NSEventSubtypeMouseEvent)
+            return;
+
+        NSString *direction;
+        CGFloat xDiff = NSEvent.mouseLocation.x - self.middleClickLocation.x, yDiff = NSEvent.mouseLocation.y - self.middleClickLocation.y;
+        if (fabs(xDiff) > fabs(yDiff))
+            direction = xDiff > 0 ? @"right" : @"left";
+        else
+            direction = yDiff > 0 ? @"up" : @"down";
+
+        __typeof__(welf) sself = welf;
+        [sself label].stringValue = [@"move " stringByAppendingString:direction];
+        [[sself label] sizeToFit];
     }];
 }
 
