@@ -21,12 +21,13 @@
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    NSLog(@"accessibility enabled: %d", AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES})); // 10.9+
+    Boolean isAccessibilityEnabled = AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES}); // 10.9+
     [self installMiddleClickMonitor];
 
     NSTextField *l = [NSTextField new];
     l.editable = NO;
     [self.window.contentView addSubview:l];
+    [self showText:[@"accessibility " stringByAppendingString:isAccessibilityEnabled ? @"enabled" : @"disabled"]];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
@@ -50,7 +51,9 @@
     self.middleClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         if (event.buttonNumber != 2) // handle only middle button click
             return;
-        self.middleClickLocation = NSEvent.mouseLocation;
+
+        __typeof__(welf) sself = welf;
+        sself.middleClickLocation = NSEvent.mouseLocation;
 
         AXUIElementRef sysElement = AXUIElementCreateSystemWide(), curElement;
         AXUIElementCopyElementAtPosition(sysElement, NSEvent.mouseLocation.x, NSEvent.mouseLocation.y, &curElement);
@@ -103,9 +106,8 @@
         //            CFRelease(scrollEvent);
         //        }
 
-        __typeof__(welf) sself = welf;
-        [sself label].stringValue = [@"captured " stringByAppendingFormat:@"%d", pid];
-        [[sself label] sizeToFit];
+        NSRunningApplication *app = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+        [sself showText:[@"captured " stringByAppendingFormat:@"%@ (%@)", app.localizedName, app.bundleIdentifier]];
 
         [NSEvent removeMonitor:sself.middleClickMonitor];
         sself.middleClickMonitor = nil;
@@ -118,8 +120,7 @@
     __typeof__(self) __weak welf = self;
     self.anyClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown | NSEventMaskScrollWheel handler:^(NSEvent * _Nonnull event) {
         __typeof__(welf) sself = welf;
-        [sself label].stringValue = @"released";
-        [[sself label] sizeToFit];
+        [sself showText:@"released"];
 
         [NSEvent removeMonitor:sself.anyClickMonitor];
         sself.anyClickMonitor = nil;
@@ -143,9 +144,39 @@
             direction = yDiff > 0 ? @"up" : @"down";
 
         __typeof__(welf) sself = welf;
-        [sself label].stringValue = [@"move " stringByAppendingString:direction];
-        [[sself label] sizeToFit];
+        [sself showText:[@"move " stringByAppendingString:direction]];
     }];
+}
+
+- (void)showText:(NSString *)text {
+    [self label].stringValue = text;
+    [[self label] sizeToFit];
+}
+
+- (void)dumpAttributesOfAXUIElement:(AXUIElementRef)element {
+    NSLog(@"attributes of %@:", element);
+    if (!element)
+        return;
+
+    typedef AXError(*AttributeNamesFn)(AXUIElementRef element, CFArrayRef __nullable * __nonnull CF_RETURNS_RETAINED names);
+    NSString *(^dumpAttributes)(AttributeNamesFn f) = ^NSString *(AttributeNamesFn f) {
+        CFArrayRef attributes;
+        if (f(element, &attributes) != kAXErrorSuccess)
+            return nil;
+
+        NSMutableString *attributesStr = [NSMutableString new];
+        for (NSString *attribute in (NSArray *)CFBridgingRelease(attributes)) {
+            CFTypeRef value;
+            AXUIElementCopyAttributeValue(element, (CFStringRef)attribute, &value);
+            [attributesStr appendFormat:@"%@ = %@\n", attribute, value];
+            if (value)
+                CFRelease(value);
+        }
+        return attributesStr;
+    };
+
+    NSLog(@"simple: %@", dumpAttributes(AXUIElementCopyAttributeNames));
+    NSLog(@"parametrized: %@", dumpAttributes(AXUIElementCopyParameterizedAttributeNames));
 }
 
 @end
