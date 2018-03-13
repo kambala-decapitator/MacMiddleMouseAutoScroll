@@ -56,18 +56,32 @@
         AXUIElementCopyElementAtPosition(sysElement, NSEvent.mouseLocation.x, NSEvent.mouseLocation.y, &curElement);
         CFRelease(sysElement);
 
-        pid_t pid;
-        AXUIElementGetPid(curElement, &pid);
-
+        // TODO: try to read element's objc class like Accessibility Inspector does
+        // valid classes (from Safari): WKPDFPluginAccessibilityObject, WKAccessibilityWebPageObject
+        pid_t pid = -1;
         BOOL isScrollArea = NO;
         while (curElement)
         {
             CFTypeRef role;
-            AXUIElementCopyAttributeValue(curElement, kAXRoleAttribute, &role);
-            isScrollArea = CFStringCompare(role, kAXScrollAreaRole, kNilOptions) == kCFCompareEqualTo;
-            CFRelease(role);
+            if (AXUIElementCopyAttributeValue(curElement, kAXRoleAttribute, &role) == kAXErrorSuccess)
+            {
+                isScrollArea = CFStringCompare(role, kAXScrollAreaRole, kNilOptions) == kCFCompareEqualTo;
+                CFRelease(role);
+            }
+
+            if (!isScrollArea)
+            {
+                // when Safari displays a PDF, it has "AXRoleDescription = PDF Content", but it's not contained in a scroll area
+                CFTypeRef roleDesc;
+                if (AXUIElementCopyAttributeValue(curElement, kAXRoleDescriptionAttribute, &roleDesc) == kAXErrorSuccess)
+                {
+                    isScrollArea = CFStringFind(roleDesc, CFSTR("pdf"), kCFCompareCaseInsensitive).length > 0;
+                    CFRelease(roleDesc);
+                }
+            }
             if (isScrollArea)
             {
+                AXUIElementGetPid(curElement, &pid);
                 CFRelease(curElement);
                 break;
             }
