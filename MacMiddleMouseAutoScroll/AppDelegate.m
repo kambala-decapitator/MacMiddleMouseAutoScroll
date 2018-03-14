@@ -185,7 +185,7 @@
     NSScreen *screen = [NSScreen.screens filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSScreen *screen, NSDictionary<NSString *,id> *bindings) {
         return NSPointInRect(cocoaPoint, screen.frame);
     }]].firstObject;
-    return screen ? CGPointMake(cocoaPoint.x, NSHeight(screen.frame) - cocoaPoint.y - 1) : CGPointZero;
+    return screen ? CGPointMake(cocoaPoint.x, NSMaxY(screen.frame) - cocoaPoint.y - 1) : CGPointZero;
 }
 
 @end
