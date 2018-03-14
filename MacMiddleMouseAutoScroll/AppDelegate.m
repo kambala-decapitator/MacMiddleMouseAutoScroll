@@ -55,8 +55,9 @@
         __typeof__(welf) sself = welf;
         sself.middleClickLocation = NSEvent.mouseLocation;
 
+        CGPoint carbonPoint = [sself carbonScreenPointFromCocoaScreenPoint:sself.middleClickLocation];
         AXUIElementRef sysElement = AXUIElementCreateSystemWide(), curElement;
-        AXUIElementCopyElementAtPosition(sysElement, NSEvent.mouseLocation.x, NSEvent.mouseLocation.y, &curElement);
+        AXUIElementCopyElementAtPosition(sysElement, carbonPoint.x, carbonPoint.y, &curElement);
         CFRelease(sysElement);
 
         // TODO: try to read element's objc class like Accessibility Inspector does
@@ -177,6 +178,14 @@
 
     NSLog(@"simple: %@", dumpAttributes(AXUIElementCopyAttributeNames));
     NSLog(@"parametrized: %@", dumpAttributes(AXUIElementCopyParameterizedAttributeNames));
+}
+
+// https://developer.apple.com/library/content/samplecode/UIElementInspector/Listings/UIElementUtilities_m.html
+- (CGPoint)carbonScreenPointFromCocoaScreenPoint:(NSPoint)cocoaPoint {
+    NSScreen *screen = [NSScreen.screens filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSScreen *screen, NSDictionary<NSString *,id> *bindings) {
+        return NSPointInRect(cocoaPoint, screen.frame);
+    }]].firstObject;
+    return screen ? CGPointMake(cocoaPoint.x, NSHeight(screen.frame) - cocoaPoint.y - 1) : CGPointZero;
 }
 
 @end
