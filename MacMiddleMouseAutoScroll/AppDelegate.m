@@ -51,6 +51,8 @@
     self.middleClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         if (event.buttonNumber != 2) // handle only middle button click
             return;
+        if ([NSCursor.currentSystemCursor.image.TIFFRepresentation isEqualToData:NSCursor.pointingHandCursor.image.TIFFRepresentation]) // ignore clicking on links
+            return;
 
         __typeof__(welf) sself = welf;
         sself.middleClickLocation = NSEvent.mouseLocation;
