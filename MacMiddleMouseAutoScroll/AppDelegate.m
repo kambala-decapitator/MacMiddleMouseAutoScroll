@@ -50,17 +50,15 @@
 - (void)installMiddleClickMonitor {
     self.statusItem.title = @"passive";
 
-    __typeof__(self) __weak welf = self;
     self.middleClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         if (event.buttonNumber != 2) // handle only middle button click
             return;
         if ([NSCursor.currentSystemCursor.image.TIFFRepresentation isEqualToData:NSCursor.pointingHandCursor.image.TIFFRepresentation]) // ignore clicking on links
             return;
 
-        __typeof__(welf) sself = welf;
-        sself.middleClickLocation = NSEvent.mouseLocation;
+        self.middleClickLocation = NSEvent.mouseLocation;
 
-        CGPoint carbonPoint = [sself carbonScreenPointFromCocoaScreenPoint:sself.middleClickLocation];
+        CGPoint carbonPoint = [self carbonScreenPointFromCocoaScreenPoint:self.middleClickLocation];
         AXUIElementRef sysElement = AXUIElementCreateSystemWide(), curElement;
         AXUIElementCopyElementAtPosition(sysElement, carbonPoint.x, carbonPoint.y, &curElement);
         CFRelease(sysElement);
@@ -110,36 +108,32 @@
         //            CFRelease(scrollEvent);
         //        }
 
-        [NSEvent removeMonitor:sself.middleClickMonitor];
-        sself.middleClickMonitor = nil;
-        [sself installAnyClickOrWheelMonitor];
-        [sself installMouseMoveMonitor];
+        [NSEvent removeMonitor:self.middleClickMonitor];
+        self.middleClickMonitor = nil;
+        [self installAnyClickOrWheelMonitor];
+        [self installMouseMoveMonitor];
 
-        sself.statusItem.title = @"active";
+        self.statusItem.title = @"active";
     }];
 }
 
 - (void)installAnyClickOrWheelMonitor {
-    __typeof__(self) __weak welf = self;
     self.anyClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown | NSEventMaskScrollWheel handler:^(NSEvent * _Nonnull event) {
-        __typeof__(welf) sself = welf;
-        [NSEvent removeMonitor:sself.anyClickMonitor];
-        sself.anyClickMonitor = nil;
-        [NSEvent removeMonitor:sself.moveMonitor];
-        sself.moveMonitor = nil;
-        [sself installMiddleClickMonitor];
+        [NSEvent removeMonitor:self.anyClickMonitor];
+        self.anyClickMonitor = nil;
+        [NSEvent removeMonitor:self.moveMonitor];
+        self.moveMonitor = nil;
+        [self installMiddleClickMonitor];
     }];
 }
 
 - (void)installMouseMoveMonitor {
-    __typeof__(self) __weak welf = self;
     self.moveMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved handler:^(NSEvent * _Nonnull event) {
         if (event.subtype != NSEventSubtypeMouseEvent)
             return;
 
-        __typeof__(welf) sself = welf;
         NSString *direction;
-        CGFloat xDiff = NSEvent.mouseLocation.x - sself.middleClickLocation.x, yDiff = NSEvent.mouseLocation.y - sself.middleClickLocation.y;
+        CGFloat xDiff = NSEvent.mouseLocation.x - self.middleClickLocation.x, yDiff = NSEvent.mouseLocation.y - self.middleClickLocation.y;
         if (fabs(xDiff) > fabs(yDiff))
             direction = xDiff > 0 ? @"right" : @"left";
         else
