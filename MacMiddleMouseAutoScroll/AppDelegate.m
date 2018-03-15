@@ -8,6 +8,15 @@
 
 #import "AppDelegate.h"
 
+static const CGFloat MinimumActivationDistanceFromClick = 10.0;
+
+typedef enum : NSUInteger {
+    AutoScrollDirectionUp,
+    AutoScrollDirectionRight,
+    AutoScrollDirectionDown,
+    AutoScrollDirectionLeft
+} AutoScrollDirection;
+
 @interface AppDelegate ()
 @property (weak) IBOutlet NSWindow *window;
 @property (strong) NSStatusItem *statusItem;
@@ -17,6 +26,7 @@
 @property (weak) id moveMonitor;
 
 @property NSPoint middleClickLocation;
+@property (weak) NSTimer *autoScrollTimer;
 @end
 
 @implementation AppDelegate
@@ -35,7 +45,7 @@
 - (void)applicationWillTerminate:(NSNotification *)notification {
     [NSEvent removeMonitor:self.middleClickMonitor];
     [NSEvent removeMonitor:self.anyClickMonitor];
-    [NSEvent removeMonitor:self.moveMonitor];
+    [self stopAutoScroll];
 }
 
 #pragma mark - Actions
@@ -65,6 +75,8 @@
 
         // TODO: try to read element's objc class like Accessibility Inspector does
         // valid classes (from Safari): WKPDFPluginAccessibilityObject, WKAccessibilityWebPageObject
+        // seems not possible: https://stackoverflow.com/a/45599806/1971301
+        // AXClassName attribute is available only for Apple's private entitlement com.apple.private.accessibility.inspection
         BOOL isScrollArea = NO;
         while (curElement)
         {
@@ -99,15 +111,6 @@
         if (!isScrollArea)
             return;
 
-        // wheel1 - vertical, wheel2 - horizontal
-        // > 0 - up/left, < 0 - down/right
-        //        CGEventRef scrollEvent = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitPixel, 1, -15);
-        //        if (scrollEvent)
-        //        {
-        //            CGEventPost(kCGHIDEventTap, scrollEvent);
-        //            CFRelease(scrollEvent);
-        //        }
-
         [NSEvent removeMonitor:self.middleClickMonitor];
         self.middleClickMonitor = nil;
         [self installAnyClickOrWheelMonitor];
@@ -118,27 +121,56 @@
 }
 
 - (void)installAnyClickOrWheelMonitor {
-    self.anyClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown | NSEventMaskScrollWheel handler:^(NSEvent * _Nonnull event) {
+    self.anyClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         [NSEvent removeMonitor:self.anyClickMonitor];
         self.anyClickMonitor = nil;
-        [NSEvent removeMonitor:self.moveMonitor];
-        self.moveMonitor = nil;
+        [self stopAutoScroll];
         [self installMiddleClickMonitor];
     }];
 }
 
 - (void)installMouseMoveMonitor {
     self.moveMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved handler:^(NSEvent * _Nonnull event) {
-        if (event.subtype != NSEventSubtypeMouseEvent)
+        if (event.subtype != NSEventSubtypeMouseEvent || self.autoScrollTimer)
             return;
 
-        NSString *direction;
-        CGFloat xDiff = NSEvent.mouseLocation.x - self.middleClickLocation.x, yDiff = NSEvent.mouseLocation.y - self.middleClickLocation.y;
-        if (fabs(xDiff) > fabs(yDiff))
-            direction = xDiff > 0 ? @"right" : @"left";
+        CGFloat xDiff = NSEvent.mouseLocation.x - self.middleClickLocation.x, xDiffAbs = fabs(xDiff);
+        CGFloat yDiff = NSEvent.mouseLocation.y - self.middleClickLocation.y, yDiffAbs = fabs(yDiff);
+        if (xDiffAbs < MinimumActivationDistanceFromClick && yDiffAbs < MinimumActivationDistanceFromClick)
+            return;
+
+        AutoScrollDirection direction;
+        if (xDiffAbs > yDiffAbs)
+            direction = xDiff > 0 ? AutoScrollDirectionRight : AutoScrollDirectionLeft;
         else
-            direction = yDiff > 0 ? @"up" : @"down";
+            direction = yDiff > 0 ? AutoScrollDirectionUp : AutoScrollDirectionDown;
+
+        NSTimer *timer = [NSTimer timerWithTimeInterval:1.0 target:self selector:@selector(performAutoScroll) userInfo:@{@"direction": @(direction)} repeats:YES];
+        [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+        self.autoScrollTimer = timer;
     }];
+}
+
+- (void)performAutoScroll {
+    AutoScrollDirection direction = [self.autoScrollTimer.userInfo[@"direction"] unsignedIntegerValue];
+    BOOL isVerticalScroll = direction == AutoScrollDirectionUp || direction == AutoScrollDirectionDown;
+    int32_t distance = (direction == AutoScrollDirectionDown || direction == AutoScrollDirectionRight ? -1 : 1) * 15;
+    // wheel1 - vertical, wheel2 - horizontal
+    // > 0 - up/left, < 0 - down/right
+    CGEventRef scrollEvent = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitPixel, isVerticalScroll ? 1 : 2, isVerticalScroll ? distance : 0, isVerticalScroll ? 0 : distance);
+    if (scrollEvent)
+    {
+        CGEventPost(kCGHIDEventTap, scrollEvent);
+        CFRelease(scrollEvent);
+    }
+}
+
+- (void)stopAutoScroll {
+    [self.autoScrollTimer invalidate];
+    self.autoScrollTimer = nil;
+
+    [NSEvent removeMonitor:self.moveMonitor];
+    self.moveMonitor = nil;
 }
 
 - (void)dumpAttributesOfAXUIElement:(AXUIElementRef)element {
