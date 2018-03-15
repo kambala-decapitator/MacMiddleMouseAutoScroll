@@ -20,6 +20,7 @@ typedef enum : NSUInteger {
 @interface AppDelegate ()
 @property (weak) IBOutlet NSWindow *window;
 @property (strong) NSStatusItem *statusItem;
+@property (weak) IBOutlet NSTextField *label;
 
 @property (weak) id middleClickMonitor;
 @property (weak) id anyClickMonitor;
@@ -40,6 +41,8 @@ typedef enum : NSUInteger {
 
     AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES});
     [self installMiddleClickMonitor];
+
+    self.label.stringValue = [@"App version: " stringByAppendingString:[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
