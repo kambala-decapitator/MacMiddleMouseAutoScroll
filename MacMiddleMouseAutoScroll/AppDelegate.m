@@ -145,27 +145,37 @@ typedef enum : NSUInteger {
         else
             direction = yDiff > 0 ? AutoScrollDirectionUp : AutoScrollDirectionDown;
 
-        NSTimer *timer = [NSTimer timerWithTimeInterval:1.0 target:self selector:@selector(performAutoScroll) userInfo:@{@"direction": @(direction)} repeats:YES];
+        NSTimer *timer = [NSTimer timerWithTimeInterval:0.01 target:self selector:@selector(performAutoScroll) userInfo:@{@"direction": @(direction)} repeats:YES];
         [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
         self.autoScrollTimer = timer;
+
+        [self postScrollWheelEventWithPhase:kCGScrollPhaseBegan];
     }];
 }
 
-- (void)performAutoScroll {
+- (void)postScrollWheelEventWithPhase:(CGScrollPhase)scrollPhase {
     AutoScrollDirection direction = [self.autoScrollTimer.userInfo[@"direction"] unsignedIntegerValue];
     BOOL isVerticalScroll = direction == AutoScrollDirectionUp || direction == AutoScrollDirectionDown;
-    int32_t distance = (direction == AutoScrollDirectionDown || direction == AutoScrollDirectionRight ? -1 : 1) * 15;
+    int32_t distance = (direction == AutoScrollDirectionDown || direction == AutoScrollDirectionRight ? -1 : 1) * 1;
     // wheel1 - vertical, wheel2 - horizontal
     // > 0 - up/left, < 0 - down/right
     CGEventRef scrollEvent = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitPixel, isVerticalScroll ? 1 : 2, isVerticalScroll ? distance : 0, isVerticalScroll ? 0 : distance);
     if (scrollEvent)
     {
-        CGEventPost(kCGHIDEventTap, scrollEvent);
+        // synthesizing trackpad event ensures that Smooze app doesn't modify our scroll event
+        CGEventSetIntegerValueField(scrollEvent, kCGScrollWheelEventScrollPhase, scrollPhase);
+        CGEventPost(kCGSessionEventTap, scrollEvent);
         CFRelease(scrollEvent);
     }
 }
 
+- (void)performAutoScroll {
+    [self postScrollWheelEventWithPhase:kCGScrollPhaseChanged];
+}
+
 - (void)stopAutoScroll {
+    [self postScrollWheelEventWithPhase:kCGScrollPhaseEnded];
+
     [self.autoScrollTimer invalidate];
     self.autoScrollTimer = nil;
 
