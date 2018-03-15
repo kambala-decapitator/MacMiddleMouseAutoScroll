@@ -264,6 +264,7 @@
 				DEVELOPMENT_TEAM = 4XHN44TEVG;
 				INFOPLIST_FILE = MacMiddleMouseAutoScroll/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kambala.MacMiddleMouseAutoScroll;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -277,6 +278,7 @@
 				DEVELOPMENT_TEAM = 4XHN44TEVG;
 				INFOPLIST_FILE = MacMiddleMouseAutoScroll/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kambala.MacMiddleMouseAutoScroll;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
