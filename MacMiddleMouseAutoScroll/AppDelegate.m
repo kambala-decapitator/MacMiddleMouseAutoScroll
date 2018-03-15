@@ -38,7 +38,7 @@ typedef enum : NSUInteger {
     [self.statusItem.menu addItem:NSMenuItem.separatorItem];
     [self.statusItem.menu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@""];
 
-    AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES}); // 10.9+
+    AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES});
     [self installMiddleClickMonitor];
 }
 
@@ -181,32 +181,6 @@ typedef enum : NSUInteger {
 
     [NSEvent removeMonitor:self.moveMonitor];
     self.moveMonitor = nil;
-}
-
-- (void)dumpAttributesOfAXUIElement:(AXUIElementRef)element {
-    NSLog(@"attributes of %@:", element);
-    if (!element)
-        return;
-
-    typedef AXError(*AttributeNamesFn)(AXUIElementRef element, CFArrayRef __nullable * __nonnull CF_RETURNS_RETAINED names);
-    NSString *(^dumpAttributes)(AttributeNamesFn f) = ^NSString *(AttributeNamesFn f) {
-        CFArrayRef attributes;
-        if (f(element, &attributes) != kAXErrorSuccess)
-            return nil;
-
-        NSMutableString *attributesStr = [NSMutableString new];
-        for (NSString *attribute in (NSArray *)CFBridgingRelease(attributes)) {
-            CFTypeRef value;
-            AXUIElementCopyAttributeValue(element, (CFStringRef)attribute, &value);
-            [attributesStr appendFormat:@"%@ = %@\n", attribute, value];
-            if (value)
-                CFRelease(value);
-        }
-        return attributesStr;
-    };
-
-    NSLog(@"simple: %@", dumpAttributes(AXUIElementCopyAttributeNames));
-    NSLog(@"parametrized: %@", dumpAttributes(AXUIElementCopyParameterizedAttributeNames));
 }
 
 // https://developer.apple.com/library/content/samplecode/UIElementInspector/Listings/UIElementUtilities_m.html
