@@ -10,6 +10,7 @@
 
 @interface AppDelegate ()
 @property (weak) IBOutlet NSWindow *window;
+@property (strong) NSStatusItem *statusItem;
 
 @property (weak) id middleClickMonitor;
 @property (weak) id anyClickMonitor;
@@ -21,13 +22,14 @@
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    Boolean isAccessibilityEnabled = AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES}); // 10.9+
-    [self installMiddleClickMonitor];
+    self.statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
+    self.statusItem.menu = [[NSMenu alloc] initWithTitle:@""];
+    [self.statusItem.menu addItemWithTitle:@"Show" action:@selector(showWindow) keyEquivalent:@""];
+    [self.statusItem.menu addItem:NSMenuItem.separatorItem];
+    [self.statusItem.menu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@""];
 
-    NSTextField *l = [NSTextField new];
-    l.editable = NO;
-    [self.window.contentView addSubview:l];
-    [self showText:[@"accessibility " stringByAppendingString:isAccessibilityEnabled ? @"enabled" : @"disabled"]];
+    AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES}); // 10.9+
+    [self installMiddleClickMonitor];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
@@ -36,17 +38,18 @@
     [NSEvent removeMonitor:self.moveMonitor];
 }
 
-- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    return YES;
+#pragma mark - Actions
+
+- (void)showWindow {
+    [self.window setIsVisible:YES];
+    [NSApp activateIgnoringOtherApps:YES];
 }
 
 #pragma mark - Private
 
-- (NSTextField *)label {
-    return self.window.contentView.subviews.firstObject;
-}
-
 - (void)installMiddleClickMonitor {
+    self.statusItem.title = @"passive";
+
     __typeof__(self) __weak welf = self;
     self.middleClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         if (event.buttonNumber != 2) // handle only middle button click
@@ -64,7 +67,6 @@
 
         // TODO: try to read element's objc class like Accessibility Inspector does
         // valid classes (from Safari): WKPDFPluginAccessibilityObject, WKAccessibilityWebPageObject
-        pid_t pid = -1;
         BOOL isScrollArea = NO;
         while (curElement)
         {
@@ -87,7 +89,6 @@
             }
             if (isScrollArea)
             {
-                AXUIElementGetPid(curElement, &pid);
                 CFRelease(curElement);
                 break;
             }
@@ -109,13 +110,12 @@
         //            CFRelease(scrollEvent);
         //        }
 
-        NSRunningApplication *app = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
-        [sself showText:[@"captured " stringByAppendingFormat:@"%@ (%@)", app.localizedName, app.bundleIdentifier]];
-
         [NSEvent removeMonitor:sself.middleClickMonitor];
         sself.middleClickMonitor = nil;
         [sself installAnyClickOrWheelMonitor];
         [sself installMouseMoveMonitor];
+
+        sself.statusItem.title = @"active";
     }];
 }
 
@@ -123,8 +123,6 @@
     __typeof__(self) __weak welf = self;
     self.anyClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown | NSEventMaskScrollWheel handler:^(NSEvent * _Nonnull event) {
         __typeof__(welf) sself = welf;
-        [sself showText:@"released"];
-
         [NSEvent removeMonitor:sself.anyClickMonitor];
         sself.anyClickMonitor = nil;
         [NSEvent removeMonitor:sself.moveMonitor];
@@ -139,21 +137,14 @@
         if (event.subtype != NSEventSubtypeMouseEvent)
             return;
 
+        __typeof__(welf) sself = welf;
         NSString *direction;
-        CGFloat xDiff = NSEvent.mouseLocation.x - self.middleClickLocation.x, yDiff = NSEvent.mouseLocation.y - self.middleClickLocation.y;
+        CGFloat xDiff = NSEvent.mouseLocation.x - sself.middleClickLocation.x, yDiff = NSEvent.mouseLocation.y - sself.middleClickLocation.y;
         if (fabs(xDiff) > fabs(yDiff))
             direction = xDiff > 0 ? @"right" : @"left";
         else
             direction = yDiff > 0 ? @"up" : @"down";
-
-        __typeof__(welf) sself = welf;
-        [sself showText:[@"move " stringByAppendingString:direction]];
     }];
-}
-
-- (void)showText:(NSString *)text {
-    [self label].stringValue = text;
-    [[self label] sizeToFit];
 }
 
 - (void)dumpAttributesOfAXUIElement:(AXUIElementRef)element {
