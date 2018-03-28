@@ -69,18 +69,21 @@ typedef enum : NSUInteger {
         if ([NSCursor.currentSystemCursor.image.TIFFRepresentation isEqualToData:NSCursor.pointingHandCursor.image.TIFFRepresentation]) // ignore clicking on links
             return;
 
-        self.middleClickLocation = NSEvent.mouseLocation;
-
-        CGPoint carbonPoint = [self carbonScreenPointFromCocoaScreenPoint:self.middleClickLocation];
-        AXUIElementRef sysElement = AXUIElementCreateSystemWide(), curElement;
-        AXUIElementCopyElementAtPosition(sysElement, carbonPoint.x, carbonPoint.y, &curElement);
+        CGPoint carbonPoint = [self carbonScreenPointFromCocoaScreenPoint:NSEvent.mouseLocation];
+        AXUIElementRef sysElement = AXUIElementCreateSystemWide(), clickedElement;
+        AXUIElementCopyElementAtPosition(sysElement, carbonPoint.x, carbonPoint.y, &clickedElement);
         CFRelease(sysElement);
+        if (!clickedElement)
+            return;
+
+        self.middleClickLocation = NSEvent.mouseLocation;
 
         // TODO: try to read element's objc class like Accessibility Inspector does
         // valid classes (from Safari): WKPDFPluginAccessibilityObject, WKAccessibilityWebPageObject
         // seems not possible: https://stackoverflow.com/a/45599806/1971301
         // AXClassName attribute is available only for Apple's private entitlement com.apple.private.accessibility.inspection
         BOOL isScrollArea = NO;
+        AXUIElementRef curElement = CFRetain(clickedElement);
         while (curElement)
         {
             CFTypeRef role;
@@ -101,10 +104,7 @@ typedef enum : NSUInteger {
                 }
             }
             if (isScrollArea)
-            {
-                CFRelease(curElement);
                 break;
-            }
 
             AXUIElementRef parentElement;
             AXUIElementCopyAttributeValue(curElement, kAXParentAttribute, (CFTypeRef *)&parentElement);
@@ -112,14 +112,79 @@ typedef enum : NSUInteger {
             curElement = parentElement;
         }
         if (!isScrollArea)
+        {
+            CFRelease(clickedElement);
             return;
+        }
 
+        // detect if middle-clicked on a Top Site in Safari
+        if (clickedElement == curElement)
+            goto ENABLE_AUTOSCROLL;
+
+        CFTypeRef scrollAreaLabel;
+        if (AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) != kAXErrorSuccess)
+            goto ENABLE_AUTOSCROLL;
+
+        BOOL isTopSites = CFStringCompare(scrollAreaLabel, CFSTR("Top Sites"), kNilOptions) == kCFCompareEqualTo;
+        CFRelease(scrollAreaLabel);
+        if (!isTopSites)
+            goto ENABLE_AUTOSCROLL;
+
+        // sanity check that it's really Safari
+        pid_t appPid = -1;
+        AXUIElementGetPid(clickedElement, &appPid);
+        if (appPid != -1 && ![[NSRunningApplication runningApplicationWithProcessIdentifier:appPid].bundleIdentifier isEqualToString:@"com.apple.Safari"])
+            goto ENABLE_AUTOSCROLL;
+
+        CFTypeRef clickedRole;
+        if (AXUIElementCopyAttributeValue(clickedElement, kAXRoleAttribute, &clickedRole) != kAXErrorSuccess)
+            goto ENABLE_AUTOSCROLL;
+
+        // Top Site is a button that contains a label
+        AXUIElementRef buttonElement;
+        if (CFStringCompare(clickedRole, kAXStaticTextRole, kNilOptions) == kCFCompareEqualTo)
+            AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&buttonElement);
+        else
+            buttonElement = CFRetain(clickedElement);
+        CFRelease(clickedRole);
+
+        CFTypeRef buttonRoleDesc;
+        AXError err = AXUIElementCopyAttributeValue(buttonElement, kAXRoleDescriptionAttribute, &buttonRoleDesc);
+        CFRelease(buttonElement);
+        if (err != kAXErrorSuccess)
+            goto ENABLE_AUTOSCROLL;
+
+        // verify that it's the proper element
+        BOOL isTopSiteButton = CFStringCompare(buttonRoleDesc, CFSTR("Button"), kNilOptions) == kCFCompareEqualTo;
+        CFRelease(buttonRoleDesc);
+        if (isTopSiteButton)
+        {
+            // send Cmd+LeftClick to open the Top Site in a new tab
+            BOOL(^postMouseEventWithType)(CGEventType) = ^BOOL(CGEventType mouseType) {
+                CGEventRef mouseEvent = CGEventCreateMouseEvent(NULL, mouseType, carbonPoint, kCGMouseButtonLeft);
+                if (!mouseEvent)
+                    return NO;
+
+                CGEventSetFlags(mouseEvent, kCGEventFlagMaskCommand);
+                CGEventPost(kCGSessionEventTap, mouseEvent);
+                CFRelease(mouseEvent);
+                return YES;
+            };
+            if (postMouseEventWithType(kCGEventLeftMouseDown) && postMouseEventWithType(kCGEventLeftMouseUp))
+                goto RELEASE_ELEMENTS;
+        }
+
+    ENABLE_AUTOSCROLL:
         [NSEvent removeMonitor:self.middleClickMonitor];
         self.middleClickMonitor = nil;
         [self installAnyClickOrWheelMonitor];
         [self installMouseMoveMonitor];
 
         self.statusItem.title = @"active";
+
+    RELEASE_ELEMENTS:
+        CFRelease(curElement);
+        CFRelease(clickedElement);
     }];
 }
 
