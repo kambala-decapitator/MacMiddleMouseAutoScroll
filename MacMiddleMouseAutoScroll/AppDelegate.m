@@ -9,6 +9,7 @@
 #import "AppDelegate.h"
 
 static const CGFloat MinimumActivationDistanceFromClick = 10.0;
+static NSString *const SafariBundleIdentifier = @"com.apple.Safari";
 
 typedef enum : NSUInteger {
     AutoScrollDirectionUp,
@@ -133,7 +134,7 @@ typedef enum : NSUInteger {
         // sanity check that it's really Safari
         pid_t appPid = -1;
         AXUIElementGetPid(clickedElement, &appPid);
-        if (appPid != -1 && ![[NSRunningApplication runningApplicationWithProcessIdentifier:appPid].bundleIdentifier isEqualToString:@"com.apple.Safari"])
+        if (appPid != -1 && ![[NSRunningApplication runningApplicationWithProcessIdentifier:appPid].bundleIdentifier isEqualToString:SafariBundleIdentifier])
             goto ENABLE_AUTOSCROLL;
 
         CFTypeRef clickedRole;
@@ -160,12 +161,19 @@ typedef enum : NSUInteger {
         if (isTopSiteButton)
         {
             // send Cmd+LeftClick to open the Top Site in a new tab
+            NSUserDefaults *safariDefaults = [[NSUserDefaults alloc] initWithSuiteName:SafariBundleIdentifier];
+            BOOL isNewTabWithCmdClick = [safariDefaults boolForKey:@"CommandClickMakesTabs"];
+
             BOOL(^postMouseEventWithType)(CGEventType) = ^BOOL(CGEventType mouseType) {
                 CGEventRef mouseEvent = CGEventCreateMouseEvent(NULL, mouseType, carbonPoint, kCGMouseButtonLeft);
                 if (!mouseEvent)
                     return NO;
 
-                CGEventSetFlags(mouseEvent, kCGEventFlagMaskCommand);
+                CGEventFlags flags = kCGEventFlagMaskCommand;
+                if (!isNewTabWithCmdClick)
+                    flags |= kCGEventFlagMaskAlternate;
+                CGEventSetFlags(mouseEvent, flags);
+
                 CGEventPost(kCGSessionEventTap, mouseEvent);
                 CFRelease(mouseEvent);
                 return YES;
