@@ -11,6 +11,9 @@
 static const CGFloat MinimumActivationDistanceFromClick = 10.0;
 static NSString *const SafariBundleIdentifier = @"com.apple.Safari";
 
+static NSString *const IsAutoscrollEnabledDefaultsKey = @"enableAutoscroll";
+static NSString *const IsInterceptingSafariTopSiteDefaultsKey = @"interceptSafariTopSite";
+
 typedef enum : NSUInteger {
     AutoScrollDirectionUp,
     AutoScrollDirectionRight,
@@ -21,7 +24,6 @@ typedef enum : NSUInteger {
 @interface AppDelegate ()
 @property (weak) IBOutlet NSWindow *window;
 @property (strong) NSStatusItem *statusItem;
-@property (weak) IBOutlet NSTextField *label;
 
 @property (weak) id middleClickMonitor;
 @property (weak) id anyClickMonitor;
@@ -43,7 +45,7 @@ typedef enum : NSUInteger {
     AXIsProcessTrustedWithOptions((CFDictionaryRef)@{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES});
     [self installMiddleClickMonitor];
 
-    self.label.stringValue = [@"App version: " stringByAppendingString:[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]];
+    self.window.title = [self.window.title stringByAppendingFormat:@" v%@", [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
@@ -62,6 +64,8 @@ typedef enum : NSUInteger {
 #pragma mark - Private
 
 - (void)installMiddleClickMonitor {
+    if (![self isAutoscrollEnabled] && ![self isInterceptingSafariTopSite])
+        return;
     self.statusItem.title = @"passive";
 
     self.middleClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
@@ -119,7 +123,7 @@ typedef enum : NSUInteger {
         }
 
         // detect if middle-clicked on a Top Site in Safari
-        if (clickedElement == curElement)
+        if (![self isInterceptingSafariTopSite] || clickedElement == curElement)
             goto ENABLE_AUTOSCROLL;
 
         CFTypeRef scrollAreaLabel;
@@ -183,6 +187,9 @@ typedef enum : NSUInteger {
         }
 
     ENABLE_AUTOSCROLL:
+        if (![self isAutoscrollEnabled])
+            goto RELEASE_ELEMENTS;
+
         [NSEvent removeMonitor:self.middleClickMonitor];
         self.middleClickMonitor = nil;
         [self installAnyClickOrWheelMonitor];
@@ -265,6 +272,14 @@ typedef enum : NSUInteger {
         return NSPointInRect(cocoaPoint, screen.frame);
     }]].firstObject;
     return screen ? CGPointMake(cocoaPoint.x, NSMaxY(screen.frame) - cocoaPoint.y - 1) : CGPointZero;
+}
+
+- (BOOL)isAutoscrollEnabled {
+    return [[NSUserDefaultsController.sharedUserDefaultsController.values valueForKey:IsAutoscrollEnabledDefaultsKey] boolValue];
+}
+
+- (BOOL)isInterceptingSafariTopSite {
+    return [[NSUserDefaultsController.sharedUserDefaultsController.values valueForKey:IsInterceptingSafariTopSiteDefaultsKey] boolValue];
 }
 
 @end
