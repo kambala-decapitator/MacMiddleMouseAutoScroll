@@ -121,6 +121,7 @@ typedef enum : NSUInteger {
             CFRelease(clickedElement);
             return;
         }
+        CFTypeRef clickedRole = NULL;
 
         // detect if middle-clicked on a Top Site or Bookmark in Safari
         if (![self isInterceptingSafariTopSite] || clickedElement == curElement)
@@ -132,40 +133,32 @@ typedef enum : NSUInteger {
         if (appPid != -1 && ![[NSRunningApplication runningApplicationWithProcessIdentifier:appPid].bundleIdentifier isEqualToString:SafariBundleIdentifier])
             goto ENABLE_AUTOSCROLL;
 
-        AXUIElementRef windowElement;
-        if (AXUIElementCopyAttributeValue(curElement, kAXWindowAttribute, (CFTypeRef *)&windowElement) != kAXErrorSuccess)
-            goto ENABLE_AUTOSCROLL;
+        BOOL isTopSites = NO, isBookmarks = NO;
+        CFTypeRef scrollAreaLabel;
+        // this attribute is absent in Edit Bookmarks
+        if (AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) == kAXErrorSuccess)
+        {
+            isTopSites  = CFStringCompare(scrollAreaLabel, CFSTR("top sites"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+            isBookmarks = CFStringCompare(scrollAreaLabel, CFSTR("bookmarks"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+            CFRelease(scrollAreaLabel);
+        }
 
-        CFTypeRef windowTitle;
-        AXError err = AXUIElementCopyAttributeValue(windowElement, kAXTitleAttribute, &windowTitle);
-        CFRelease(windowElement);
-        if (err != kAXErrorSuccess)
-            goto ENABLE_AUTOSCROLL;
-
-        BOOL isTopSites  = CFStringCompare(windowTitle, CFSTR("Top Sites"), kNilOptions) == kCFCompareEqualTo;
-        BOOL isBookmarks = CFStringCompare(windowTitle, CFSTR("Bookmarks"), kNilOptions) == kCFCompareEqualTo;
-        CFRelease(windowTitle);
-        if (!isTopSites && !isBookmarks)
+        if (AXUIElementCopyAttributeValue(clickedElement, kAXRoleAttribute, &clickedRole) != kAXErrorSuccess)
             goto ENABLE_AUTOSCROLL;
 
         if (isTopSites)
         {
-            CFTypeRef clickedRole;
-            if (AXUIElementCopyAttributeValue(clickedElement, kAXRoleAttribute, &clickedRole) != kAXErrorSuccess)
-                goto ENABLE_AUTOSCROLL;
-
             // Top Site is a button that contains a label
             AXUIElementRef buttonElement = NULL;
             if (CFStringCompare(clickedRole, kAXStaticTextRole, kNilOptions) == kCFCompareEqualTo)
                 AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&buttonElement);
             else
                 buttonElement = CFRetain(clickedElement);
-            CFRelease(clickedRole);
             if (!buttonElement)
                 goto ENABLE_AUTOSCROLL;
 
             CFTypeRef buttonRoleDesc;
-            err = AXUIElementCopyAttributeValue(buttonElement, kAXRoleDescriptionAttribute, &buttonRoleDesc);
+            AXError err = AXUIElementCopyAttributeValue(buttonElement, kAXRoleDescriptionAttribute, &buttonRoleDesc);
             CFRelease(buttonElement);
             if (err != kAXErrorSuccess)
                 goto ENABLE_AUTOSCROLL;
@@ -178,22 +171,31 @@ typedef enum : NSUInteger {
             else
                 goto ENABLE_AUTOSCROLL;
         }
-        else // bookmarks
+        else // probably it's bookmarks
         {
-            // a bookmark (text field) is inside an outline row
-            AXUIElementRef parentElement;
-            if (AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&parentElement) != kAXErrorSuccess)
-                goto ENABLE_AUTOSCROLL;
+            if (!isBookmarks) // probably it's Edit Bookmarks
+            {
+                // check that one of scrollArea's children is named Bookmarks (with role AXOutline, but let's ignore that)
+                CFArrayRef scrollAreaChildren;
+                if (AXUIElementCopyAttributeValue(curElement, kAXChildrenAttribute, (CFTypeRef *)&scrollAreaChildren) != kAXErrorSuccess)
+                    goto ENABLE_AUTOSCROLL;
 
-            CFTypeRef parentSubrole;
-            err = AXUIElementCopyAttributeValue(parentElement, kAXSubroleAttribute, &parentSubrole);
-            CFRelease(parentElement);
-            if (err != kAXErrorSuccess)
-                goto ENABLE_AUTOSCROLL;
+                NSUInteger i = [CFBridgingRelease(scrollAreaChildren) indexOfObjectPassingTest:^BOOL(id _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                    AXUIElementRef element = (__bridge AXUIElementRef)(obj);
+                    CFTypeRef label;
+                    if (AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute, &label) != kAXErrorSuccess)
+                        return NO;
 
-            BOOL isOutlineRow = CFStringCompare(parentSubrole, kAXOutlineRowSubrole, kNilOptions) == kCFCompareEqualTo;
-            CFRelease(parentSubrole);
-            if (isOutlineRow)
+                    BOOL result = CFStringCompare(label, CFSTR("bookmarks"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+                    CFRelease(label);
+                    return result;
+                }];
+                if (i == NSNotFound)
+                    goto ENABLE_AUTOSCROLL;
+                isBookmarks = YES;
+            }
+
+            if (CFStringCompare(clickedRole, kAXTextFieldRole, kNilOptions) == kCFCompareEqualTo)
                 goto SEND_CMD_LEFTCLICK;
             else
                 goto ENABLE_AUTOSCROLL;
@@ -236,6 +238,8 @@ typedef enum : NSUInteger {
         self.statusItem.title = @"active";
 
     RELEASE_ELEMENTS:
+        if (clickedRole)
+            CFRelease(clickedRole);
         CFRelease(curElement);
         CFRelease(clickedElement);
     }];
