@@ -138,8 +138,7 @@ typedef enum : NSUInteger {
         // this attribute is absent in Edit Bookmarks
         if (AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) == kAXErrorSuccess)
         {
-            isTopSites  = CFStringCompare(scrollAreaLabel, CFSTR("top sites"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
-            isBookmarks = CFStringCompare(scrollAreaLabel, CFSTR("bookmarks"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+            isTopSites = CFStringCompare(scrollAreaLabel, CFSTR("top sites"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
             CFRelease(scrollAreaLabel);
         }
 
@@ -173,27 +172,29 @@ typedef enum : NSUInteger {
         }
         else // probably it's bookmarks
         {
-            if (!isBookmarks) // probably it's Edit Bookmarks
-            {
-                // check that one of scrollArea's children is named Bookmarks (with role AXOutline, but let's ignore that)
-                CFArrayRef scrollAreaChildren;
-                if (AXUIElementCopyAttributeValue(curElement, kAXChildrenAttribute, (CFTypeRef *)&scrollAreaChildren) != kAXErrorSuccess)
-                    goto ENABLE_AUTOSCROLL;
+            // check that one of scrollArea's children is named Bookmarks (with role AXOutline, but let's ignore that)
+            CFArrayRef scrollAreaChildren;
+            if (AXUIElementCopyAttributeValue(curElement, kAXChildrenAttribute, (CFTypeRef *)&scrollAreaChildren) != kAXErrorSuccess)
+                goto ENABLE_AUTOSCROLL;
 
-                NSUInteger i = [CFBridgingRelease(scrollAreaChildren) indexOfObjectPassingTest:^BOOL(id _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-                    AXUIElementRef element = (__bridge AXUIElementRef)(obj);
-                    CFTypeRef label;
-                    if (AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute, &label) != kAXErrorSuccess)
-                        return NO;
+            NSUInteger i = [(__bridge NSArray *)scrollAreaChildren indexOfObjectPassingTest:^BOOL(id _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                AXUIElementRef element = (__bridge AXUIElementRef)(obj);
+                CFTypeRef label;
+                if (AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute, &label) != kAXErrorSuccess)
+                    return NO;
 
-                    BOOL result = CFStringCompare(label, CFSTR("bookmarks"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
-                    CFRelease(label);
-                    return result;
-                }];
-                if (i == NSNotFound)
-                    goto ENABLE_AUTOSCROLL;
-                isBookmarks = YES;
-            }
+                BOOL result = CFStringCompare(label, CFSTR("bookmarks"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+                CFRelease(label);
+                return result;
+            }];
+            if (i == NSNotFound)
+                goto ENABLE_AUTOSCROLL;
+            isBookmarks = YES;
+
+            // clear selected rows to prevent those bookmarks from opening
+            AXUIElementRef bookmarksElement = CFArrayGetValueAtIndex(scrollAreaChildren, i);
+            AXUIElementSetAttributeValue(bookmarksElement, kAXSelectedRowsAttribute, (__bridge CFTypeRef)(@[]));
+            CFRelease(scrollAreaChildren);
 
             if (CFStringCompare(clickedRole, kAXTextFieldRole, kNilOptions) == kCFCompareEqualTo)
                 goto SEND_CMD_LEFTCLICK;
