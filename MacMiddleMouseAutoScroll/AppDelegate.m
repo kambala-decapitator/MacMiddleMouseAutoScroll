@@ -192,7 +192,7 @@ typedef enum : NSUInteger {
 
         [NSEvent removeMonitor:self.middleClickMonitor];
         self.middleClickMonitor = nil;
-        [self installAnyClickOrWheelMonitor];
+        [self installAnyClickMonitor];
         [self installMouseMoveMonitor];
 
         self.statusItem.title = @"active";
@@ -203,7 +203,7 @@ typedef enum : NSUInteger {
     }];
 }
 
-- (void)installAnyClickOrWheelMonitor {
+- (void)installAnyClickMonitor {
     self.anyClickMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown handler:^(NSEvent * _Nonnull event) {
         [NSEvent removeMonitor:self.anyClickMonitor];
         self.anyClickMonitor = nil;
