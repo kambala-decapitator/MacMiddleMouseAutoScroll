@@ -111,7 +111,7 @@ typedef enum : NSUInteger {
             if (isScrollArea)
                 break;
 
-            AXUIElementRef parentElement;
+            AXUIElementRef parentElement = NULL;
             AXUIElementCopyAttributeValue(curElement, kAXParentAttribute, (CFTypeRef *)&parentElement);
             CFRelease(curElement);
             curElement = parentElement;
@@ -122,17 +122,8 @@ typedef enum : NSUInteger {
             return;
         }
 
-        // detect if middle-clicked on a Top Site in Safari
+        // detect if middle-clicked on a Top Site or Bookmark in Safari
         if (![self isInterceptingSafariTopSite] || clickedElement == curElement)
-            goto ENABLE_AUTOSCROLL;
-
-        CFTypeRef scrollAreaLabel;
-        if (AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) != kAXErrorSuccess)
-            goto ENABLE_AUTOSCROLL;
-
-        BOOL isTopSites = CFStringCompare(scrollAreaLabel, CFSTR("Top Sites"), kNilOptions) == kCFCompareEqualTo;
-        CFRelease(scrollAreaLabel);
-        if (!isTopSites)
             goto ENABLE_AUTOSCROLL;
 
         // sanity check that it's really Safari
@@ -141,50 +132,97 @@ typedef enum : NSUInteger {
         if (appPid != -1 && ![[NSRunningApplication runningApplicationWithProcessIdentifier:appPid].bundleIdentifier isEqualToString:SafariBundleIdentifier])
             goto ENABLE_AUTOSCROLL;
 
-        CFTypeRef clickedRole;
-        if (AXUIElementCopyAttributeValue(clickedElement, kAXRoleAttribute, &clickedRole) != kAXErrorSuccess)
+        AXUIElementRef windowElement;
+        if (AXUIElementCopyAttributeValue(curElement, kAXWindowAttribute, (CFTypeRef *)&windowElement) != kAXErrorSuccess)
             goto ENABLE_AUTOSCROLL;
 
-        // Top Site is a button that contains a label
-        AXUIElementRef buttonElement;
-        if (CFStringCompare(clickedRole, kAXStaticTextRole, kNilOptions) == kCFCompareEqualTo)
-            AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&buttonElement);
-        else
-            buttonElement = CFRetain(clickedElement);
-        CFRelease(clickedRole);
-
-        CFTypeRef buttonRoleDesc;
-        AXError err = AXUIElementCopyAttributeValue(buttonElement, kAXRoleDescriptionAttribute, &buttonRoleDesc);
-        CFRelease(buttonElement);
+        CFTypeRef windowTitle;
+        AXError err = AXUIElementCopyAttributeValue(windowElement, kAXTitleAttribute, &windowTitle);
+        CFRelease(windowElement);
         if (err != kAXErrorSuccess)
             goto ENABLE_AUTOSCROLL;
 
-        // verify that it's the proper element
-        BOOL isTopSiteButton = CFStringCompare(buttonRoleDesc, CFSTR("Button"), kNilOptions) == kCFCompareEqualTo;
-        CFRelease(buttonRoleDesc);
-        if (isTopSiteButton)
+        BOOL isTopSites  = CFStringCompare(windowTitle, CFSTR("Top Sites"), kNilOptions) == kCFCompareEqualTo;
+        BOOL isBookmarks = CFStringCompare(windowTitle, CFSTR("Bookmarks"), kNilOptions) == kCFCompareEqualTo;
+        CFRelease(windowTitle);
+        if (!isTopSites && !isBookmarks)
+            goto ENABLE_AUTOSCROLL;
+
+        if (isTopSites)
         {
-            // send Cmd+LeftClick to open the Top Site in a new tab
-            NSUserDefaults *safariDefaults = [[NSUserDefaults alloc] initWithSuiteName:SafariBundleIdentifier];
-            BOOL isNewTabWithCmdClick = [safariDefaults boolForKey:@"CommandClickMakesTabs"];
+            CFTypeRef clickedRole;
+            if (AXUIElementCopyAttributeValue(clickedElement, kAXRoleAttribute, &clickedRole) != kAXErrorSuccess)
+                goto ENABLE_AUTOSCROLL;
 
-            BOOL(^postMouseEventWithType)(CGEventType) = ^BOOL(CGEventType mouseType) {
-                CGEventRef mouseEvent = CGEventCreateMouseEvent(NULL, mouseType, carbonPoint, kCGMouseButtonLeft);
-                if (!mouseEvent)
-                    return NO;
+            // Top Site is a button that contains a label
+            AXUIElementRef buttonElement = NULL;
+            if (CFStringCompare(clickedRole, kAXStaticTextRole, kNilOptions) == kCFCompareEqualTo)
+                AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&buttonElement);
+            else
+                buttonElement = CFRetain(clickedElement);
+            CFRelease(clickedRole);
+            if (!buttonElement)
+                goto ENABLE_AUTOSCROLL;
 
-                CGEventFlags flags = kCGEventFlagMaskCommand;
-                if (!isNewTabWithCmdClick)
-                    flags |= kCGEventFlagMaskAlternate;
-                CGEventSetFlags(mouseEvent, flags);
+            CFTypeRef buttonRoleDesc;
+            err = AXUIElementCopyAttributeValue(buttonElement, kAXRoleDescriptionAttribute, &buttonRoleDesc);
+            CFRelease(buttonElement);
+            if (err != kAXErrorSuccess)
+                goto ENABLE_AUTOSCROLL;
 
-                CGEventPost(kCGSessionEventTap, mouseEvent);
-                CFRelease(mouseEvent);
-                return YES;
-            };
-            if (postMouseEventWithType(kCGEventLeftMouseDown) && postMouseEventWithType(kCGEventLeftMouseUp))
-                goto RELEASE_ELEMENTS;
+            // verify that it's the proper element
+            BOOL isTopSiteButton = CFStringCompare(buttonRoleDesc, CFSTR("Button"), kNilOptions) == kCFCompareEqualTo;
+            CFRelease(buttonRoleDesc);
+            if (isTopSiteButton)
+                goto SEND_CMD_LEFTCLICK;
+            else
+                goto ENABLE_AUTOSCROLL;
         }
+        else // bookmarks
+        {
+            // a bookmark (text field) is inside an outline row
+            AXUIElementRef parentElement;
+            if (AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&parentElement) != kAXErrorSuccess)
+                goto ENABLE_AUTOSCROLL;
+
+            CFTypeRef parentSubrole;
+            err = AXUIElementCopyAttributeValue(parentElement, kAXSubroleAttribute, &parentSubrole);
+            CFRelease(parentElement);
+            if (err != kAXErrorSuccess)
+                goto ENABLE_AUTOSCROLL;
+
+            BOOL isOutlineRow = CFStringCompare(parentSubrole, kAXOutlineRowSubrole, kNilOptions) == kCFCompareEqualTo;
+            CFRelease(parentSubrole);
+            if (isOutlineRow)
+                goto SEND_CMD_LEFTCLICK;
+            else
+                goto ENABLE_AUTOSCROLL;
+        }
+
+    SEND_CMD_LEFTCLICK: {
+        NSUserDefaults *safariDefaults = [[NSUserDefaults alloc] initWithSuiteName:SafariBundleIdentifier];
+        BOOL isNewTabWithCmdClick = [safariDefaults boolForKey:@"CommandClickMakesTabs"];
+
+        BOOL(^postMouseEventWithType)(CGEventType) = ^BOOL(CGEventType mouseType) {
+            CGEventRef mouseEvent = CGEventCreateMouseEvent(NULL, mouseType, carbonPoint, kCGMouseButtonLeft);
+            if (!mouseEvent)
+                return NO;
+
+            CGEventFlags flags = kCGEventFlagMaskCommand;
+            if (!isNewTabWithCmdClick)
+                flags |= kCGEventFlagMaskAlternate;
+            CGEventSetFlags(mouseEvent, flags);
+
+            if (isBookmarks) // opening a bookmark in new tab requires double-click
+                CGEventSetIntegerValueField(mouseEvent, kCGMouseEventClickState, 2);
+
+            CGEventPost(kCGSessionEventTap, mouseEvent);
+            CFRelease(mouseEvent);
+            return YES;
+        };
+        if (postMouseEventWithType(kCGEventLeftMouseDown) && postMouseEventWithType(kCGEventLeftMouseUp))
+            goto RELEASE_ELEMENTS;
+    }
 
     ENABLE_AUTOSCROLL:
         if (![self isAutoscrollEnabled])
