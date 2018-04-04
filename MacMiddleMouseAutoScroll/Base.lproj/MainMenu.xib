@@ -3,6 +3,7 @@
     <dependencies>
         <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="13771"/>
+        <capability name="box content view" minToolsVersion="7.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
@@ -22,14 +23,14 @@
         <window title="MacMiddleMouseAutoScroll" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" animationBehavior="default" id="QvC-M9-y7g">
             <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
-            <rect key="contentRect" x="335" y="390" width="298" height="74"/>
+            <rect key="contentRect" x="335" y="390" width="416" height="151"/>
             <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1417"/>
             <view key="contentView" wantsLayer="YES" id="EiT-Mj-1SZ">
-                <rect key="frame" x="0.0" y="0.0" width="298" height="74"/>
+                <rect key="frame" x="0.0" y="0.0" width="280" height="132"/>
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="f1e-aN-6f9">
-                        <rect key="frame" x="18" y="38" width="126" height="18"/>
+                        <rect key="frame" x="18" y="96" width="126" height="18"/>
                         <buttonCell key="cell" type="check" title="Enable autoscroll" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="LTQ-hZ-AuK">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
@@ -44,33 +45,63 @@
                             </binding>
                         </connections>
                     </button>
-                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Yby-vy-YTW">
-                        <rect key="frame" x="18" y="18" width="178" height="18"/>
-                        <buttonCell key="cell" type="check" title="Intercept Safari's Top Site" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="LyP-Xs-jFU">
-                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                            <font key="font" metaFont="system"/>
-                        </buttonCell>
-                        <connections>
-                            <binding destination="iaU-87-MQn" name="value" keyPath="values.interceptSafariTopSite" id="9iG-kN-bET">
-                                <dictionary key="options">
-                                    <bool key="NSAllowsEditingMultipleValuesSelection" value="NO"/>
-                                    <integer key="NSNullPlaceholder" value="1"/>
-                                </dictionary>
-                            </binding>
-                        </connections>
-                    </button>
+                    <box borderType="line" title="Middle Click in Safari" translatesAutoresizingMaskIntoConstraints="NO" id="8VU-4k-RIj">
+                        <rect key="frame" x="17" y="16" width="246" height="74"/>
+                        <view key="contentView" id="BvQ-t9-RQk">
+                            <rect key="frame" x="1" y="1" width="244" height="58"/>
+                            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                            <subviews>
+                                <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Yby-vy-YTW">
+                                    <rect key="frame" x="18" y="22" width="79" height="18"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                                    <buttonCell key="cell" type="check" title="Top Sites" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="LyP-Xs-jFU">
+                                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                                        <font key="font" metaFont="system"/>
+                                    </buttonCell>
+                                    <connections>
+                                        <binding destination="iaU-87-MQn" name="value" keyPath="values.interceptSafariTopSite" id="9iG-kN-bET">
+                                            <dictionary key="options">
+                                                <bool key="NSAllowsEditingMultipleValuesSelection" value="NO"/>
+                                                <integer key="NSNullPlaceholder" value="1"/>
+                                            </dictionary>
+                                        </binding>
+                                    </connections>
+                                </button>
+                                <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="WV4-24-gPg">
+                                    <rect key="frame" x="136" y="22" width="90" height="18"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                                    <buttonCell key="cell" type="check" title="Bookmarks" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="a9n-mr-mEr">
+                                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                                        <font key="font" metaFont="system"/>
+                                    </buttonCell>
+                                    <connections>
+                                        <binding destination="iaU-87-MQn" name="value" keyPath="values.interceptSafariBookmark" id="ecv-hG-zst">
+                                            <dictionary key="options">
+                                                <bool key="NSAllowsEditingMultipleValuesSelection" value="NO"/>
+                                                <integer key="NSNullPlaceholder" value="1"/>
+                                            </dictionary>
+                                        </binding>
+                                    </connections>
+                                </button>
+                            </subviews>
+                        </view>
+                        <constraints>
+                            <constraint firstAttribute="height" constant="70" id="1ZX-qa-wld"/>
+                            <constraint firstAttribute="width" constant="240" id="sde-Yj-rVk"/>
+                        </constraints>
+                    </box>
                 </subviews>
                 <constraints>
-                    <constraint firstItem="Yby-vy-YTW" firstAttribute="leading" secondItem="f1e-aN-6f9" secondAttribute="leading" id="4kE-Zd-cVd"/>
-                    <constraint firstItem="Yby-vy-YTW" firstAttribute="top" secondItem="f1e-aN-6f9" secondAttribute="bottom" constant="6" symbolic="YES" id="Bsp-30-tRs"/>
+                    <constraint firstAttribute="trailing" secondItem="8VU-4k-RIj" secondAttribute="trailing" constant="20" symbolic="YES" id="KK9-EX-Z1D"/>
                     <constraint firstItem="f1e-aN-6f9" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="Lg2-k3-42n"/>
                     <constraint firstItem="f1e-aN-6f9" firstAttribute="top" secondItem="EiT-Mj-1SZ" secondAttribute="top" constant="20" symbolic="YES" id="Uf7-Rq-8xW"/>
-                    <constraint firstAttribute="bottom" secondItem="Yby-vy-YTW" secondAttribute="bottom" constant="20" symbolic="YES" id="YNp-vH-KPF"/>
-                    <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="Yby-vy-YTW" secondAttribute="trailing" id="ae2-8G-HnE"/>
+                    <constraint firstItem="8VU-4k-RIj" firstAttribute="leading" secondItem="f1e-aN-6f9" secondAttribute="leading" id="Uhx-vj-4bb"/>
                     <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="f1e-aN-6f9" secondAttribute="trailing" id="btl-qH-ywz"/>
+                    <constraint firstItem="8VU-4k-RIj" firstAttribute="top" secondItem="f1e-aN-6f9" secondAttribute="bottom" constant="8" symbolic="YES" id="jVy-pk-hAr"/>
+                    <constraint firstAttribute="bottom" secondItem="8VU-4k-RIj" secondAttribute="bottom" constant="20" symbolic="YES" id="xiC-rd-VKD"/>
                 </constraints>
             </view>
-            <point key="canvasLocation" x="-50" y="22"/>
+            <point key="canvasLocation" x="-73" y="71.5"/>
         </window>
         <userDefaultsController representsSharedInstance="YES" id="iaU-87-MQn"/>
     </objects>

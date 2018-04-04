@@ -8,11 +8,14 @@
 
 #import "AppDelegate.h"
 
+#define BOOL_SETTING(defaultsKey) [[NSUserDefaultsController.sharedUserDefaultsController.values valueForKey:defaultsKey] boolValue]
+
 static const CGFloat MinimumActivationDistanceFromClick = 10.0;
 static NSString *const SafariBundleIdentifier = @"com.apple.Safari";
 
 static NSString *const IsAutoscrollEnabledDefaultsKey = @"enableAutoscroll";
-static NSString *const IsInterceptingSafariTopSiteDefaultsKey = @"interceptSafariTopSite";
+static NSString *const IsInterceptingSafariTopSiteDefaultsKey  = @"interceptSafariTopSite";
+static NSString *const IsInterceptingSafariBookmarkDefaultsKey = @"interceptSafariBookmark";
 
 typedef enum : NSUInteger {
     AutoScrollDirectionUp,
@@ -64,7 +67,7 @@ typedef enum : NSUInteger {
 #pragma mark - Private
 
 - (void)installMiddleClickMonitor {
-    if (![self isAutoscrollEnabled] && ![self isInterceptingSafariTopSite])
+    if (!([self isAutoscrollEnabled] || [self isInterceptingSafariTopSite] || [self isInterceptingSafariBookmark]))
         return;
     self.statusItem.title = @"passive";
 
@@ -124,7 +127,8 @@ typedef enum : NSUInteger {
         CFTypeRef clickedRole = NULL;
 
         // detect if middle-clicked on a Top Site or Bookmark in Safari
-        if (![self isInterceptingSafariTopSite] || clickedElement == curElement)
+        BOOL isInterceptingSafariTopSite = [self isInterceptingSafariTopSite], isInterceptingSafariBookmark = [self isInterceptingSafariBookmark];
+        if (!(isInterceptingSafariTopSite || isInterceptingSafariBookmark) || clickedElement == curElement)
             goto ENABLE_AUTOSCROLL;
 
         // sanity check that it's really Safari
@@ -135,8 +139,7 @@ typedef enum : NSUInteger {
 
         BOOL isTopSites = NO, isBookmarks = NO;
         CFTypeRef scrollAreaLabel;
-        // this attribute is absent in Edit Bookmarks
-        if (AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) == kAXErrorSuccess)
+        if (isInterceptingSafariTopSite && AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) == kAXErrorSuccess)
         {
             isTopSites = CFStringCompare(scrollAreaLabel, CFSTR("top sites"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
             CFRelease(scrollAreaLabel);
@@ -170,7 +173,7 @@ typedef enum : NSUInteger {
             else
                 goto ENABLE_AUTOSCROLL;
         }
-        else // probably it's bookmarks
+        else if (isInterceptingSafariBookmark)
         {
             // check that one of scrollArea's children is named Bookmarks (with role AXOutline, but let's ignore that)
             CFArrayRef scrollAreaChildren;
@@ -201,6 +204,8 @@ typedef enum : NSUInteger {
             else
                 goto ENABLE_AUTOSCROLL;
         }
+        else
+            goto ENABLE_AUTOSCROLL;
 
     SEND_CMD_LEFTCLICK: {
         NSUserDefaults *safariDefaults = [[NSUserDefaults alloc] initWithSuiteName:SafariBundleIdentifier];
@@ -317,12 +322,18 @@ typedef enum : NSUInteger {
     return screen ? CGPointMake(cocoaPoint.x, NSMaxY(screen.frame) - cocoaPoint.y - 1) : CGPointZero;
 }
 
+#pragma mark Settings
+
 - (BOOL)isAutoscrollEnabled {
-    return [[NSUserDefaultsController.sharedUserDefaultsController.values valueForKey:IsAutoscrollEnabledDefaultsKey] boolValue];
+    return BOOL_SETTING(IsAutoscrollEnabledDefaultsKey);
 }
 
 - (BOOL)isInterceptingSafariTopSite {
-    return [[NSUserDefaultsController.sharedUserDefaultsController.values valueForKey:IsInterceptingSafariTopSiteDefaultsKey] boolValue];
+    return BOOL_SETTING(IsInterceptingSafariTopSiteDefaultsKey);
+}
+
+- (BOOL)isInterceptingSafariBookmark {
+    return BOOL_SETTING(IsInterceptingSafariBookmarkDefaultsKey);
 }
 
 @end
