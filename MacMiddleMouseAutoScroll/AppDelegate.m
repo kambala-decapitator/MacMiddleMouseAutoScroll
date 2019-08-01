@@ -208,8 +208,28 @@ typedef enum : NSUInteger {
             goto ENABLE_AUTOSCROLL;
 
     SEND_CMD_LEFTCLICK: {
-        NSUserDefaults *safariDefaults = [[NSUserDefaults alloc] initWithSuiteName:SafariBundleIdentifier];
-        BOOL isNewTabWithCmdClick = [safariDefaults boolForKey:@"CommandClickMakesTabs"];
+        BOOL isNewTabWithCmdClick = ^{
+            NSString *defaultsPath = @"/usr/bin/defaults";
+            NSPipe *pipe = [NSPipe new];
+
+            NSTask *t = [NSTask new];
+            t.arguments = @[@"read", SafariBundleIdentifier, @"CommandClickMakesTabs"];
+            t.standardOutput = pipe;
+            if (@available(macOS 10.13, *))
+            {
+                t.executableURL = [NSURL fileURLWithPath:defaultsPath];
+                [t launchAndReturnError:NULL];
+            }
+            else
+            {
+                t.launchPath = defaultsPath;
+                [t launch];
+            }
+            [t waitUntilExit];
+
+            NSString *output = [[NSString alloc] initWithData:pipe.fileHandleForReading.readDataToEndOfFile encoding:NSASCIIStringEncoding];
+            return [output boolValue];
+        }();
 
         BOOL(^postMouseEventWithType)(CGEventType) = ^BOOL(CGEventType mouseType) {
             CGEventRef mouseEvent = CGEventCreateMouseEvent(NULL, mouseType, carbonPoint, kCGMouseButtonLeft);
