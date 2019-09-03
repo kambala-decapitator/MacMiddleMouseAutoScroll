@@ -248,8 +248,9 @@ typedef enum : NSUInteger {
             CFRelease(mouseEvent);
             return YES;
         };
-        if (postMouseEventWithType(kCGEventLeftMouseDown) && postMouseEventWithType(kCGEventLeftMouseUp))
-            goto RELEASE_ELEMENTS;
+        if (postMouseEventWithType(kCGEventLeftMouseDown))
+            postMouseEventWithType(kCGEventLeftMouseUp);
+        goto RELEASE_ELEMENTS;
     }
 
     ENABLE_AUTOSCROLL:
