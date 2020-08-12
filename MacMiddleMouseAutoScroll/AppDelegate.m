@@ -67,6 +67,7 @@ typedef enum : NSUInteger {
 #pragma mark - Private
 
 - (void)installMiddleClickMonitor {
+    // TODO: on first launch all report NO
     if (!([self isAutoscrollEnabled] || [self isInterceptingSafariTopSite] || [self isInterceptingSafariBookmark]))
         return;
     self.statusItem.title = @"passive";
@@ -209,6 +210,7 @@ typedef enum : NSUInteger {
 
     SEND_CMD_LEFTCLICK: {
         BOOL isNewTabWithCmdClick = ^{
+            // TODO: needs permissions with SIP https://github.com/mathiasbynens/dotfiles/issues/849
             NSString *defaultsPath = @"/usr/bin/defaults";
             NSPipe *pipe = [NSPipe new];
 
