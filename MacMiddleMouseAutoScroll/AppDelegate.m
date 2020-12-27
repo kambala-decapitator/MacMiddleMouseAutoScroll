@@ -246,12 +246,15 @@ typedef enum : NSUInteger {
             if (isBookmarks) // opening a bookmark in new tab requires double-click
                 CGEventSetIntegerValueField(mouseEvent, kCGMouseEventClickState, 2);
 
-            CGEventPost(kCGSessionEventTap, mouseEvent);
+            CGEventPost(kCGHIDEventTap, mouseEvent);
             CFRelease(mouseEvent);
             return YES;
         };
         if (postMouseEventWithType(kCGEventLeftMouseDown))
+        {
+            usleep(15000); // Improve reliability
             postMouseEventWithType(kCGEventLeftMouseUp);
+        }
         goto RELEASE_ELEMENTS;
     }
 
