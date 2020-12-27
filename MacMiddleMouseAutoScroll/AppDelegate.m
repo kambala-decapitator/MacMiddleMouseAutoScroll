@@ -87,6 +87,9 @@ typedef enum : NSUInteger {
 
         self.middleClickLocation = NSEvent.mouseLocation;
 
+        // "top sites" is something from the start page: Favourites, Frequently Visited etc.
+        BOOL isTopSites = NO;
+
         // TODO: try to read element's objc class like Accessibility Inspector does
         // valid classes (from Safari): WKPDFPluginAccessibilityObject, WKAccessibilityWebPageObject
         // seems not possible: https://stackoverflow.com/a/45599806/1971301
@@ -99,6 +102,18 @@ typedef enum : NSUInteger {
             if (AXUIElementCopyAttributeValue(curElement, kAXRoleAttribute, &role) == kAXErrorSuccess)
             {
                 isScrollArea = CFStringCompare(role, kAXScrollAreaRole, kNilOptions) == kCFCompareEqualTo;
+
+                // "top sites" buttons are inside a section that has Role=AXList and Subrole=AXSectionList
+                if (!isTopSites && !isScrollArea && CFStringCompare(role, kAXListRole, kNilOptions) == kCFCompareEqualTo)
+                {
+                    CFTypeRef subrole;
+                    if (AXUIElementCopyAttributeValue(curElement, kAXSubroleAttribute, &subrole) == kAXErrorSuccess)
+                    {
+                        isTopSites = CFStringCompare(subrole, CFSTR("AXSectionList"), kNilOptions) == kCFCompareEqualTo;
+                        CFRelease(subrole);
+                    }
+                }
+
                 CFRelease(role);
             }
 
@@ -138,22 +153,25 @@ typedef enum : NSUInteger {
         if (appPid != -1 && ![[NSRunningApplication runningApplicationWithProcessIdentifier:appPid].bundleIdentifier isEqualToString:SafariBundleIdentifier])
             goto ENABLE_AUTOSCROLL;
 
-        BOOL isTopSites = NO, isBookmarks = NO;
-        CFTypeRef scrollAreaLabel;
-        if (isInterceptingSafariTopSite && AXUIElementCopyAttributeValue(curElement, kAXDescriptionAttribute, &scrollAreaLabel) == kAXErrorSuccess)
-        {
-            isTopSites = CFStringCompare(scrollAreaLabel, CFSTR("top sites"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
-            CFRelease(scrollAreaLabel);
-        }
-
         if (AXUIElementCopyAttributeValue(clickedElement, kAXRoleAttribute, &clickedRole) != kAXErrorSuccess)
             goto ENABLE_AUTOSCROLL;
 
+        BOOL isBookmarks = NO;
         if (isTopSites)
         {
-            // Top Site is a button that contains a label
+            // Top Site is a button that has children
+            BOOL buttonIsParent = YES;
             AXUIElementRef buttonElement = NULL;
-            if (CFStringCompare(clickedRole, kAXStaticTextRole, kNilOptions) == kCFCompareEqualTo)
+            if (CFStringCompare(clickedRole, kAXButtonRole, kNilOptions) == kCFCompareEqualTo)
+            {
+                CFArrayRef buttonChildren;
+                if (AXUIElementCopyAttributeValue(curElement, kAXChildrenAttribute, (CFTypeRef *)&buttonChildren) == kAXErrorSuccess)
+                {
+                    buttonIsParent = CFArrayGetCount(buttonChildren) == 0;
+                    CFRelease(buttonChildren);
+                }
+            }
+            if (buttonIsParent)
                 AXUIElementCopyAttributeValue(clickedElement, kAXParentAttribute, (CFTypeRef *)&buttonElement);
             else
                 buttonElement = CFRetain(clickedElement);
@@ -167,7 +185,7 @@ typedef enum : NSUInteger {
                 goto ENABLE_AUTOSCROLL;
 
             // verify that it's the proper element
-            BOOL isTopSiteButton = CFStringCompare(buttonRoleDesc, CFSTR("Button"), kNilOptions) == kCFCompareEqualTo;
+            BOOL isTopSiteButton = CFStringCompare(buttonRoleDesc, CFSTR("Button"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
             CFRelease(buttonRoleDesc);
             if (isTopSiteButton)
                 goto SEND_CMD_LEFTCLICK;
